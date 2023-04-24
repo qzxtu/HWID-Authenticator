@@ -1,44 +1,70 @@
-import os
-import hikari
-import lightbulb
+import subprocess
+import requests
+import time
+import sys
 
-# Create a new bot instance with the given token and settings
-bot = lightbulb.BotApp(
-    token="YourTokenHere",
-    default_enabled_guilds=YOUR_GUILD_ID_HERE,
-    help_slash_command=True,
-    intents=hikari.Intents.ALL
-)
 
-# Define a command that allows the bot to say something
-@bot.command()
-@lightbulb.option("text", "The text you want the bot to say")
-@lightbulb.command("say", "Make the bot say something")
-@lightbulb.implements(lightbulb.SlashCommand)
-async def say_command(ctx: lightbulb.SlashContext) -> None:
-    # Respond with the text provided by the user
-    await ctx.respond(ctx.options.text)
+def get_hwid():
+    """
+    Obtiene el HWID de la máquina utilizando el comando 'wmic csproduct get uuid'.
+    """
+    output = subprocess.check_output('wmic csproduct get uuid').decode().strip()
+    hwid = output.split('\n')[1].strip()
+    return hwid
 
-# Define a command that returns the ping of the bot
-@bot.command()
-@lightbulb.command("ping", "Returns the bot's current latency")
-async def ping_command(ctx: lightbulb.Context) -> None:
-    # Get the current latency of the bot
-    latency = int(bot.latency * 1000)
-    # Send a message with the current latency
-    await ctx.respond(f"Pong! Current latency is {latency}ms.")
 
-# Define a command that returns information about the server
-@bot.command()
-@lightbulb.command("serverinfo", "Returns information about the server")
-async def serverinfo_command(ctx: lightbulb.Context) -> None:
-    # Get information about the server
-    guild = ctx.get_guild()
-    name = guild.name
-    description = guild.description
-    member_count = guild.member_count
-    # Send a message with the server information
-    await ctx.respond(f"Server Name: {name}\nDescription: {description}\nMember Count: {member_count}")
+def check_device_authorization(auth_url, hwid):
+    """
+    Verifica si el dispositivo está autorizado mediante una solicitud GET al enlace de autorización.
+    Devuelve True si el dispositivo está autorizado y False si no lo está.
+    """
+    try:
+        response = requests.get(auth_url, timeout=5)
+        response.raise_for_status()
+    except requests.exceptions.RequestException as e:
+        print('[ERROR] Failed to fetch authorization data:', str(e))
+        time.sleep(5)
+        sys.exit(1)
 
-# Start the bot
-bot.run()
+    if hwid in response.text:
+        print('[SUCCESS] Device authorized.')
+        print('[LOGS] Welcome!')
+        return True
+    else:
+        print('[ERROR] Device not authorized.')
+        print('[LOGS] HWID:', hwid)
+        time.sleep(5)
+        sys.exit(1)
+
+
+def set_terminal_title(title):
+    """
+    Establece el título de la ventana del terminal.
+    """
+    if sys.platform.startswith('win32'):
+        os.system(f'title {title}')
+    else:
+        sys.stdout.write(f'\x1b]2;{title}\x07')
+        
+
+def main():
+    # Obtener el HWID de la máquina
+    hwid = get_hwid()
+
+    # Realizar la verificación de autorización
+    auth_url = 'yourpastebinrawlink'
+    is_authorized = check_device_authorization(auth_url, hwid)
+    
+    # Establecer el título de la ventana del terminal
+    set_terminal_title('Device Authorization')
+
+    # Esperar a que el usuario presione una tecla para salir
+    if is_authorized:
+        input('[INFO] Press any key to exit.')
+    else:
+        print('[INFO] Exiting...')
+        time.sleep(5)
+
+
+if __name__ == '__main__':
+    main()
